@@ -24,6 +24,7 @@ public class VSRPBridgeClientModSystem : ModSystem
     private ICoreServerAPI? sapi;
     private ICoreClientAPI? capi;
     private Harmony? harmony;
+    private WoundTraits? woundTraits;
     private bool charselPending;
 
     // Called on server and client
@@ -49,10 +50,13 @@ public class VSRPBridgeClientModSystem : ModSystem
         harmony.Patch(
             AccessTools.Method(typeof(CharacterSystem), "onCharSelCmd"),
             prefix: new HarmonyMethod(typeof(CharselCachedDialogPatch), nameof(CharselCachedDialogPatch.Prefix)));
+
+        woundTraits = new WoundTraits(api, harmony);
     }
 
     public override void Dispose()
     {
+        woundTraits?.Dispose();
         harmony?.UnpatchAll(Mod.Info.ModID);
         base.Dispose();
     }

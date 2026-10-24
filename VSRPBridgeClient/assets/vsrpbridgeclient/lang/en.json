@@ -1,3 +1,33 @@
 {
-    "hello": "hello world!"
+    "#": "Wound debuff descriptions in the Traits tab, one per stat code. Any ':' in a stat code is written as '-'. {0} is the change as a percentage (e.g. -15%), {1} the plain value (e.g. -2).",
+
+    "stat-maxhealthExtraPoints": "Max health {1}",
+    "stat-healingeffectivness": "Healing effectiveness {0}",
+    "stat-walkspeed": "Walk speed {0}",
+    "stat-hungerrate": "Hunger rate {0}",
+    "stat-jumpHeightMul": "Jump height {0}",
+    "stat-miningSpeedMul": "Mining speed {0}",
+    "stat-rangedWeaponsAcc": "Ranged accuracy {0}",
+    "stat-rangedWeaponsSpeed": "Ranged charge speed {0}",
+    "stat-rangedWeaponsDamage": "Ranged damage {0}",
+    "stat-meleeWeaponsDamage": "Melee damage {0}",
+    "stat-mechanicalsDamage": "Damage against mechanicals {0}",
+    "stat-animalLootDropRate": "Animal loot {0}",
+    "stat-forageDropRate": "Forage drops {0}",
+    "stat-wildCropDropRate": "Wild crop drops {0}",
+    "stat-vesselContentsDropRate": "Vessel content drops {0}",
+    "stat-oreDropRate": "Ore drops {0}",
+    "stat-rustyGearDropRate": "Rusty gear drops {0}",
+    "stat-animalSeekingRange": "Animal detection range {0}",
+    "stat-armorDurabilityLoss": "Armor durability loss {0}",
+    "stat-armorWalkSpeedAffectedness": "Armor walk speed penalty {0}",
+    "stat-bowDrawingStrength": "Bow draw strength {0}",
+    "stat-wholeVesselLootChance": "Whole vessel loot chance {0}",
+    "stat-temporalGearTLRepairCost": "Temporal gear repair cost {1}",
+    "stat-animalHarvestingTime": "Animal harvesting time {0}",
+    "stat-gliderLiftMax": "Glider lift {0}",
+    "stat-gliderSpeedMax": "Glider speed {0}",
+
+    "stat-manipulationSpeed": "Manipulation speed {0}",
+    "stat-HoD-ThirstRateMul": "Thirst rate {0}"
 }
