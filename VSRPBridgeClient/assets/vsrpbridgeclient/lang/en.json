@@ -29,5 +29,15 @@
     "stat-gliderSpeedMax": "Glider speed {0}",
 
     "stat-manipulationSpeed": "Manipulation speed {0}",
-    "stat-HoD-ThirstRateMul": "Thirst rate {0}"
+    "stat-HoD-ThirstRateMul": "Thirst rate {0}",
+
+    "baby-title": "An offspring has been born...",
+    "baby-explanation": "Choose how your newborn looks. Pick a shape below, then a material for each part, such as skin, hair and eyes. The previews show the result as you choose. Give them a name and press Confirm to receive them as a block. If you close this menu, type .baby to open it again.",
+    "baby-gender-boy": "It's a boy!",
+    "baby-gender-girl": "It's a girl!",
+    "baby-name": "Name",
+    "baby-shape": "Shape",
+    "baby-tabletop": "Make it a tabletop piece",
+    "baby-confirm": "Confirm",
+    "baby-command": "Reopens the menu for a newborn that hasn't been named yet"
 }
