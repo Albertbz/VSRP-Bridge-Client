@@ -5,6 +5,7 @@ using Vintagestory.API.Common;
 using Vintagestory.GameContent;
 using HarmonyLib;
 using ProtoBuf;
+using System;
 
 namespace VSRPBridgeClient;
 
@@ -27,25 +28,48 @@ public class VSRPBridgeClientModSystem : ModSystem
     private WoundTraits? woundTraits;
     private CharselModelRefresh? charselModelRefresh;
     private bool charselPending;
+    private GuiDialogBaby? babyDialog;
+
+    /// <summary>Server side: a player confirmed the baby dialog.</summary>
+    public event Action<IServerPlayer, BabyChoicePacket>? BabyChoiceReceived;
+    /// <summary>Server side: a player ran .baby to reopen the dialog of a pending birth.</summary>
+    public event Action<IServerPlayer>? BabyDialogRequested;
 
     // Called on server and client
     // Useful for registering block/entity classes on both sides
     public override void Start(ICoreAPI api)
     {
         api.Network.RegisterChannel(ChannelName)
-            .RegisterMessageType<OpenCharselPacket>();
+            .RegisterMessageType<OpenCharselPacket>()
+            .RegisterMessageType<OpenBabyDialogPacket>()
+            .RegisterMessageType<BabyChoicePacket>()
+            .RegisterMessageType<RequestBabyDialogPacket>();
     }
 
     public override void StartServerSide(ICoreServerAPI api)
     {
         sapi = api;
+        api.Network.GetChannel(ChannelName)
+            .SetMessageHandler<BabyChoicePacket>((player, p) => BabyChoiceReceived?.Invoke(player, p))
+            .SetMessageHandler<RequestBabyDialogPacket>((player, _) => BabyDialogRequested?.Invoke(player));
     }
 
     public override void StartClientSide(ICoreClientAPI api)
     {
         capi = api;
         api.Network.GetChannel(ChannelName)
-            .SetMessageHandler<OpenCharselPacket>(OnOpenCharsel);
+            .SetMessageHandler<OpenCharselPacket>(OnOpenCharsel)
+            .SetMessageHandler<OpenBabyDialogPacket>(OnOpenBabyDialog);
+
+        api.ChatCommands.Create("baby")
+            .WithDescription(Lang.Get("vsrpbridgeclient:baby-command"))
+            .HandleWith(_ =>
+            {
+                api.Network.GetChannel(ChannelName).SendPacket(new RequestBabyDialogPacket());
+                // No message at all: client commands print an empty one as a blank chat line. The server
+                // answers by opening the dialog, or says there is no newborn waiting
+                return new TextCommandResult { Status = EnumCommandStatus.Success };
+            });
 
         harmony = new Harmony(Mod.Info.ModID);
         harmony.Patch(
@@ -68,6 +92,26 @@ public class VSRPBridgeClientModSystem : ModSystem
     public void OpenCharsel(IServerPlayer player)
     {
         sapi?.Network.GetChannel(ChannelName).SendPacket(new OpenCharselPacket(), player);
+    }
+
+    /// <summary>Opens the baby dialog for the player, see GuiDialogBaby.</summary>
+    public void OpenBabyDialog(IServerPlayer player, OpenBabyDialogPacket packet)
+    {
+        sapi?.Network.GetChannel(ChannelName).SendPacket(packet, player);
+    }
+
+    private void OnOpenBabyDialog(OpenBabyDialogPacket p)
+    {
+        if (capi == null) return;
+        // The same birth sent again (.baby, or on join) only needs bringing back, a new one replaces it
+        if (babyDialog?.IsOpened() == true)
+        {
+            if (babyDialog.OffspringId == p.OffspringId) return;
+            babyDialog.TryClose();
+        }
+
+        babyDialog = new GuiDialogBaby(capi, p, choice => capi.Network.GetChannel(ChannelName).SendPacket(choice));
+        babyDialog.TryOpen();
     }
 
     private void OnOpenCharsel(OpenCharselPacket p)
