@@ -34,6 +34,8 @@ public class VSRPBridgeClientModSystem : ModSystem
     public event Action<IServerPlayer, BabyChoicePacket>? BabyChoiceReceived;
     /// <summary>Server side: a player ran .baby to reopen the dialog of a pending birth.</summary>
     public event Action<IServerPlayer>? BabyDialogRequested;
+    /// <summary>Server side: the baby dialog asks whether a name is free. Answer with SendBabyNameResult.</summary>
+    public event Action<IServerPlayer, CheckBabyNamePacket>? BabyNameCheckRequested;
 
     // Called on server and client
     // Useful for registering block/entity classes on both sides
@@ -43,7 +45,9 @@ public class VSRPBridgeClientModSystem : ModSystem
             .RegisterMessageType<OpenCharselPacket>()
             .RegisterMessageType<OpenBabyDialogPacket>()
             .RegisterMessageType<BabyChoicePacket>()
-            .RegisterMessageType<RequestBabyDialogPacket>();
+            .RegisterMessageType<RequestBabyDialogPacket>()
+            .RegisterMessageType<CheckBabyNamePacket>()
+            .RegisterMessageType<BabyNameResultPacket>();
     }
 
     public override void StartServerSide(ICoreServerAPI api)
@@ -51,7 +55,8 @@ public class VSRPBridgeClientModSystem : ModSystem
         sapi = api;
         api.Network.GetChannel(ChannelName)
             .SetMessageHandler<BabyChoicePacket>((player, p) => BabyChoiceReceived?.Invoke(player, p))
-            .SetMessageHandler<RequestBabyDialogPacket>((player, _) => BabyDialogRequested?.Invoke(player));
+            .SetMessageHandler<RequestBabyDialogPacket>((player, _) => BabyDialogRequested?.Invoke(player))
+            .SetMessageHandler<CheckBabyNamePacket>((player, p) => BabyNameCheckRequested?.Invoke(player, p));
     }
 
     public override void StartClientSide(ICoreClientAPI api)
@@ -59,7 +64,11 @@ public class VSRPBridgeClientModSystem : ModSystem
         capi = api;
         api.Network.GetChannel(ChannelName)
             .SetMessageHandler<OpenCharselPacket>(OnOpenCharsel)
-            .SetMessageHandler<OpenBabyDialogPacket>(OnOpenBabyDialog);
+            .SetMessageHandler<OpenBabyDialogPacket>(OnOpenBabyDialog)
+            .SetMessageHandler<BabyNameResultPacket>(p =>
+            {
+                if (babyDialog?.OffspringId == p.OffspringId) babyDialog.OnNameResult(p);
+            });
 
         api.ChatCommands.Create("baby")
             .WithDescription(Lang.Get("vsrpbridgeclient:baby-command"))
@@ -100,6 +109,12 @@ public class VSRPBridgeClientModSystem : ModSystem
         sapi?.Network.GetChannel(ChannelName).SendPacket(packet, player);
     }
 
+    /// <summary>Sends the bot's answer about a name to the player's baby dialog.</summary>
+    public void SendBabyNameResult(IServerPlayer player, BabyNameResultPacket packet)
+    {
+        sapi?.Network.GetChannel(ChannelName).SendPacket(packet, player);
+    }
+
     private void OnOpenBabyDialog(OpenBabyDialogPacket p)
     {
         if (capi == null) return;
@@ -110,7 +125,10 @@ public class VSRPBridgeClientModSystem : ModSystem
             babyDialog.TryClose();
         }
 
-        babyDialog = new GuiDialogBaby(capi, p, choice => capi.Network.GetChannel(ChannelName).SendPacket(choice));
+        var channel = capi.Network.GetChannel(ChannelName);
+        babyDialog = new GuiDialogBaby(capi, p,
+            choice => channel.SendPacket(choice),
+            name => channel.SendPacket(new CheckBabyNamePacket { OffspringId = p.OffspringId, Name = name }));
         babyDialog.TryOpen();
     }
 
