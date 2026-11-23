@@ -93,10 +93,11 @@ public class GuiDialogBaby : GuiDialogGeneric
         this.requestNameCheck = requestNameCheck;
         name = nameText = BabyStackBuilder.CleanName(packet.DefaultName);
 
+        // Each slot starts on a random option, so newborns don't all look alike unless the player changes them
         foreach (var slot in packet.Slots)
         {
-            var first = slot.Options.FirstOrDefault(o => BlockOf(o.BlockCode) != null);
-            if (first != null) choices[slot.Code] = first.BlockCode;
+            var options = slot.Options.Where(o => BlockOf(o.BlockCode) != null).ToList();
+            if (options.Count > 0) choices[slot.Code] = options[capi.World.Rand.Next(options.Count)].BlockCode;
         }
     }
 
