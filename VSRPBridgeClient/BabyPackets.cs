@@ -64,6 +64,33 @@ public class BabyChoicePacket
     public Dictionary<string, string> SlotChoices = new();
 }
 
+/// <summary>Client to server: ask whether a name is free, see BabyNameResultPacket.</summary>
+[ProtoContract(ImplicitFields = ImplicitFields.AllPublic)]
+public class CheckBabyNamePacket
+{
+    public string OffspringId = "";
+    public string Name = "";
+}
+
+public enum BabyNameStatus
+{
+    Available,
+    Taken,
+    // The bot couldn't be asked, or gave no usable answer
+    Failed
+}
+
+/// <summary>Server to client: the bot's answer for a name the dialog asked about.</summary>
+[ProtoContract(ImplicitFields = ImplicitFields.AllPublic)]
+public class BabyNameResultPacket
+{
+    public string OffspringId = "";
+    public string Name = "";
+    public BabyNameStatus Status;
+    // The bot's reason when the name is taken, shown instead of the default text when given
+    public string Message = "";
+}
+
 /// <summary>Client to server: the player ran .baby, so the server re-sends the dialog of a pending birth.</summary>
 [ProtoContract(ImplicitFields = ImplicitFields.AllPublic)]
 public class RequestBabyDialogPacket

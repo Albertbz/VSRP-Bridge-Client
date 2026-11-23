@@ -35,6 +35,7 @@ public class GuiDialogBaby : GuiDialogGeneric
 
     private readonly OpenBabyDialogPacket packet;
     private readonly Action<BabyChoicePacket> onConfirm;
+    private readonly Action<string> requestNameCheck;
     // Slot code -> chosen block code, shared between shapes so switching shape keeps the choices
     private readonly Dictionary<string, string> choices = new();
     // Shape code + materials -> preview stack. Reusing the same stack keeps the chiseled block mesh cache from
@@ -57,6 +58,26 @@ public class GuiDialogBaby : GuiDialogGeneric
     private ElementBounds? previewBounds;
     private int selectedShape;
     private string name;
+    // The name field's text as typed, which may end in a space while typing, kept when composing again
+    private string nameText = "";
+
+    // The line under the name field, as tall as its text needs. A change of height composes the dialog again,
+    // see ResizeStatus
+    private const double MinStatusHeight = 20;
+    private double statusHeight = MinStatusHeight;
+    private double statusWidth;
+    private bool resizeQueued;
+
+    // Asking the bot whether the name is free. Confirm is only enabled once it said yes for the current name
+    private const int NameCheckDelayMs = 500;
+    private const int NameCheckRetryMs = 5000;
+    // The name the last answer was for, and the answer
+    private string? checkedName;
+    private BabyNameStatus checkedStatus;
+    private string checkedMessage = "";
+    // The name a check is waiting to be sent or answered for
+    private string? requestedName;
+    private long nameCheckCallback;
     // Only offered when the server has Tabletop Games, and ticked by default
     private bool asTabletopPiece = true;
 
@@ -64,12 +85,13 @@ public class GuiDialogBaby : GuiDialogGeneric
     public override bool PrefersUngrabbedMouse => true;
     public override bool DisableMouseGrab => true;
 
-    public GuiDialogBaby(ICoreClientAPI capi, OpenBabyDialogPacket packet, Action<BabyChoicePacket> onConfirm)
+    public GuiDialogBaby(ICoreClientAPI capi, OpenBabyDialogPacket packet, Action<BabyChoicePacket> onConfirm, Action<string> requestNameCheck)
         : base(Lang.Get("vsrpbridgeclient:baby-title"), capi)
     {
         this.packet = packet;
         this.onConfirm = onConfirm;
-        name = BabyStackBuilder.CleanName(packet.DefaultName);
+        this.requestNameCheck = requestNameCheck;
+        name = nameText = BabyStackBuilder.CleanName(packet.DefaultName);
 
         foreach (var slot in packet.Slots)
         {
@@ -142,7 +164,10 @@ public class GuiDialogBaby : GuiDialogGeneric
         SingleComposer
             .AddStaticText(Lang.Get("vsrpbridgeclient:baby-name"), CairoFont.WhiteSmallText(), ElementBounds.Fixed(0, y + 5, 90, 25))
             .AddTextInput(ElementBounds.Fixed(90, y, 280, 30), OnNameChanged, CairoFont.TextInput(), "name");
-        y += 42;
+        y += 34;
+        statusWidth = contentWidth - 90;
+        SingleComposer.AddDynamicText("", CairoFont.WhiteSmallText(), ElementBounds.Fixed(90, y, statusWidth, statusHeight), "nameStatus");
+        y += statusHeight + 8;
 
         SingleComposer.AddStaticText(Lang.Get("vsrpbridgeclient:baby-shape"), CairoFont.WhiteSmallText(), ElementBounds.Fixed(0, y, 300, 22));
         y += 26;
@@ -224,9 +249,9 @@ public class GuiDialogBaby : GuiDialogGeneric
             .EndChildElements()
             .Compose();
 
-        // Setting the text calls OnNameChanged, which also enables or disables Confirm
-        SingleComposer.GetTextInput("name").SetValue(name);
-        SingleComposer.GetButton("confirm").Enabled = name.Length > 0;
+        // Setting the text calls OnNameChanged, which only asks the bot again when the name changed
+        SingleComposer.GetTextInput("name").SetValue(nameText);
+        UpdateNameStatus();
         if (packet.TabletopAvailable) SingleComposer.GetSwitch("tabletop").SetValue(asTabletopPiece);
 
         // Read before SetHeights: it reports the new scrollbar's position of 0 to the scroll handlers, which
@@ -301,14 +326,113 @@ public class GuiDialogBaby : GuiDialogGeneric
 
     private void OnNameChanged(string text)
     {
+        nameText = text;
         name = BabyStackBuilder.CleanName(text);
-        var confirm = SingleComposer?.GetButton("confirm");
-        if (confirm != null) confirm.Enabled = name.Length > 0;
+        // Composing again sets the same name, which needs no new check
+        if (name.Length > 0 && name != checkedName && name != requestedName) ScheduleNameCheck(NameCheckDelayMs);
+        if (name.Length == 0) CancelNameCheck();
+        UpdateNameStatus();
+    }
+
+    // Waits for the player to stop typing, so the bot is asked once per name rather than per letter
+    private void ScheduleNameCheck(int delayMs)
+    {
+        CancelNameCheck();
+        string forName = name;
+        requestedName = forName;
+        nameCheckCallback = capi.Event.RegisterCallback(_ =>
+        {
+            nameCheckCallback = 0;
+            if (IsOpened() && name == forName) requestNameCheck(forName);
+        }, delayMs);
+    }
+
+    private void CancelNameCheck()
+    {
+        if (nameCheckCallback != 0) capi.Event.UnregisterCallback(nameCheckCallback);
+        nameCheckCallback = 0;
+        requestedName = null;
+    }
+
+    /// <summary>The bot's answer for a name, from the server. Answers for an older name are ignored.</summary>
+    public void OnNameResult(BabyNameResultPacket result)
+    {
+        if (result.Name != name) return;
+        requestedName = null;
+        checkedName = result.Name;
+        checkedStatus = result.Status;
+        checkedMessage = result.Message ?? "";
+        // A failed check is tried again by itself, so a short hiccup doesn't leave the player stuck
+        if (result.Status == BabyNameStatus.Failed) ScheduleNameCheck(NameCheckRetryMs);
+        UpdateNameStatus();
+    }
+
+    private bool NameIsFree => name.Length > 0 && checkedName == name && checkedStatus == BabyNameStatus.Available;
+
+    private string StatusText()
+    {
+        if (name.Length == 0) return "";
+        if (checkedName != name) return Lang.Get("vsrpbridgeclient:baby-name-checking");
+        return checkedStatus switch
+        {
+            BabyNameStatus.Available => Lang.Get("vsrpbridgeclient:baby-name-available"),
+            BabyNameStatus.Taken => checkedMessage.Length > 0 ? checkedMessage : Lang.Get("vsrpbridgeclient:baby-name-taken"),
+            _ => Lang.Get("vsrpbridgeclient:baby-name-failed")
+        };
+    }
+
+    // In unscaled units. Measuring works in scaled pixels, so the width is scaled and the height scaled back
+    private double StatusHeightFor(string text) => text.Length == 0 ? MinStatusHeight
+        : Math.Max(MinStatusHeight, Math.Ceiling(capi.Gui.Text.GetMultilineTextHeight(CairoFont.WhiteSmallText(), text, GuiElement.scaled(statusWidth)) / RuntimeEnv.GUIScale));
+
+    private void UpdateNameStatus()
+    {
+        if (SingleComposer == null) return;
+        string text = StatusText();
+        SingleComposer.GetDynamicText("nameStatus")?.SetNewText(text);
+        var confirm = SingleComposer.GetButton("confirm");
+        if (confirm != null) confirm.Enabled = NameIsFree;
+
+        // A different height needs the dialog composed again. That is left until the current input event is
+        // done, as this often runs while the name field is handling a key, which would otherwise carry on in
+        // the old field and leave the caret in the wrong place
+        if (StatusHeightFor(text) != statusHeight && !resizeQueued)
+        {
+            resizeQueued = true;
+            capi.Event.EnqueueMainThreadTask(ResizeStatus, "vsrpbridgeclient-babyname");
+        }
+    }
+
+    /// <summary>Composes the dialog again with the status line as tall as its text, keeping the name field's focus and caret.</summary>
+    private void ResizeStatus()
+    {
+        resizeQueued = false;
+        if (!IsOpened() || SingleComposer == null) return;
+        double needed = StatusHeightFor(StatusText());
+        if (needed == statusHeight) return;
+
+        var input = SingleComposer.GetTextInput("name");
+        bool focused = input.HasFocus;
+        int caret = input.CaretPosWithoutLineBreaks;
+        statusHeight = needed;
+        ComposeDialog();
+        if (focused)
+        {
+            input = SingleComposer.GetTextInput("name");
+            SingleComposer.FocusElement(input.TabIndex);
+            input.CaretPosWithoutLineBreaks = caret;
+        }
+    }
+
+    public override void OnGuiClosed()
+    {
+        CancelNameCheck();
+        base.OnGuiClosed();
     }
 
     private bool OnConfirm()
     {
-        if (name.Length == 0) return true;
+        if (!NameIsFree) return true;
         BabyShape shape = packet.Shapes[selectedShape];
         onConfirm(new BabyChoicePacket
         {
