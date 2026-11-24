@@ -32,7 +32,7 @@
     "stat-HoD-ThirstRateMul": "Thirst rate {0}",
 
     "baby-title": "An offspring has been born...",
-    "baby-explanation": "Choose how your newborn looks. Pick a shape below, then a material for each part, such as skin, hair and eyes. The previews show the result as you choose. Give them a name and press Confirm to receive them as a block. If you close this menu, type .baby to open it again.",
+    "baby-explanation": "Choose how your newborn looks. Pick a shape below, then a material for each part, such as skin, hair and eyes. The shapes after the server's are the designs in your pantograph portfolio, which keep their own materials. The previews show the result as you choose. Give them a name and press Confirm to receive them as a tabletop piece. If you close this menu, type .baby to open it again.",
     "baby-gender-boy": "It's a boy!",
     "baby-gender-girl": "It's a girl!",
     "baby-name": "Name",
@@ -41,7 +41,12 @@
     "baby-name-taken": "That name is already taken.",
     "baby-name-failed": "Couldn't check the name right now. Trying again...",
     "baby-shape": "Shape",
-    "baby-tabletop": "Make it a tabletop piece",
+    "baby-portfolio-shape": "Your portfolio: {0}",
+    "baby-portfolio-materials": "This design from your portfolio keeps its own materials.",
+    "baby-piece-locked": "A newborn can't be taken out of its tabletop piece.",
+    "baby-piece-no-stacking": "Blocks can't be stacked on a newborn's tabletop piece.",
     "baby-confirm": "Confirm",
+    "baby-reshape-title": "Change how {0} looks",
+    "baby-reshape-explanation": "Pick a new shape below, then a material for each part, such as skin, hair and eyes. The shapes after the server's are the designs in your pantograph portfolio, which keep their own materials. Press Confirm to change the tabletop piece in your hand. Its name and size stay the same.",
     "baby-command": "Reopens the menu for a newborn that hasn't been named yet"
 }
