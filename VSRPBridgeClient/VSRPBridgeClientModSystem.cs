@@ -57,6 +57,9 @@ public class VSRPBridgeClientModSystem : ModSystem
             .SetMessageHandler<BabyChoicePacket>((player, p) => BabyChoiceReceived?.Invoke(player, p))
             .SetMessageHandler<RequestBabyDialogPacket>((player, _) => BabyDialogRequested?.Invoke(player))
             .SetMessageHandler<CheckBabyNamePacket>((player, p) => BabyNameCheckRequested?.Invoke(player, p));
+
+        harmony = new Harmony(Mod.Info.ModID);
+        TabletopBabyGuard.Patch(harmony, api);
     }
 
     public override void StartClientSide(ICoreClientAPI api)
@@ -85,6 +88,7 @@ public class VSRPBridgeClientModSystem : ModSystem
             AccessTools.Method(typeof(CharacterSystem), "onCharSelCmd"),
             prefix: new HarmonyMethod(typeof(CharselCachedDialogPatch), nameof(CharselCachedDialogPatch.Prefix)));
 
+        TabletopBabyGuard.Patch(harmony, api);
         woundTraits = new WoundTraits(api, harmony);
         charselModelRefresh = new CharselModelRefresh(api);
     }
