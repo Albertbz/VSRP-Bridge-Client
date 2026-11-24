@@ -58,10 +58,13 @@ public class BabyChoicePacket
     public string OffspringId = "";
     public string ShapeCode = "";
     public string Name = "";
-    // Give the baby as a Tabletop Games chiseled piece instead of a chiseled block
+    // Unused: the server makes every baby a tabletop piece when it has Tabletop Games
     public bool AsTabletopPiece;
     // Slot code -> block code
     public Dictionary<string, string> SlotChoices = new();
+    // A design from the player's own pantograph portfolio, with its own materials, instead of the server's
+    // shape ShapeCode. Null for a server shape
+    public BabyShape? CustomShape;
 }
 
 /// <summary>Client to server: ask whether a name is free, see BabyNameResultPacket.</summary>

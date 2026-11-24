@@ -78,8 +78,8 @@ public class GuiDialogBaby : GuiDialogGeneric
     // The name a check is waiting to be sent or answered for
     private string? requestedName;
     private long nameCheckCallback;
-    // Only offered when the server has Tabletop Games, and ticked by default
-    private bool asTabletopPiece = true;
+    // The server's shapes, then the designs of the player's own pantograph portfolio
+    private readonly List<BabyShape> shapes;
 
     public override string? ToggleKeyCombinationCode => null;
     public override bool PrefersUngrabbedMouse => true;
@@ -92,6 +92,7 @@ public class GuiDialogBaby : GuiDialogGeneric
         this.onConfirm = onConfirm;
         this.requestNameCheck = requestNameCheck;
         name = nameText = BabyStackBuilder.CleanName(packet.DefaultName);
+        shapes = packet.Shapes.Concat(Portfolio.Load(capi)).ToList();
 
         // Each slot starts on a random option, so newborns don't all look alike unless the player changes them
         foreach (var slot in packet.Slots)
@@ -105,14 +106,14 @@ public class GuiDialogBaby : GuiDialogGeneric
 
     public override bool TryOpen()
     {
-        if (packet.Shapes.Count == 0) return false;
+        if (shapes.Count == 0) return false;
         ComposeDialog();
         return base.TryOpen();
     }
 
     private void ComposeDialog()
     {
-        BabyShape shape = packet.Shapes[selectedShape];
+        BabyShape shape = shapes[selectedShape];
         thumbs.Clear();
         slotIcons.Clear();
         slotElements.Clear();
@@ -129,7 +130,7 @@ public class GuiDialogBaby : GuiDialogGeneric
         double slotsHeight = slotRows.Count * SlotRowHeight - SlotRowGap;
         bool slotsScroll = slotsHeight > PreviewSize;
 
-        int rows = (packet.Shapes.Count + ThumbsPerRow - 1) / ThumbsPerRow;
+        int rows = (shapes.Count + ThumbsPerRow - 1) / ThumbsPerRow;
         double rowHeight = ThumbSize + ThumbGap;
         double gridWidth = ThumbsPerRow * rowHeight - ThumbGap;
         bool scrolls = rows > VisibleThumbRows;
@@ -180,7 +181,7 @@ public class GuiDialogBaby : GuiDialogGeneric
             SingleComposer.AddVerticalScrollbar(OnThumbScroll, thumbScrollBounds, "thumbScroll");
         }
         SingleComposer.BeginClip(thumbClip);
-        for (int i = 0; i < packet.Shapes.Count; i++)
+        for (int i = 0; i < shapes.Count; i++)
         {
             double baseY = (i / ThumbsPerRow) * rowHeight;
             var thumb = ElementBounds.Fixed((i % ThumbsPerRow) * rowHeight, baseY, ThumbSize, ThumbSize);
@@ -189,8 +190,8 @@ public class GuiDialogBaby : GuiDialogGeneric
                 // Dynamic, so it is drawn where the thumbnail is after scrolling. The dialog is composed again
                 // when the shape changes, which moves the highlight
                 .AddDynamicCustomDraw(thumb, (ctx, _, b) => DrawFrame(ctx, b, selected))
-                .AddHoverText(packet.Shapes[i].Label, CairoFont.WhiteSmallText(), 250, thumb);
-            thumbs.Add((packet.Shapes[i], thumb, baseY));
+                .AddHoverText(shapes[i].Label, CairoFont.WhiteSmallText(), 250, thumb);
+            thumbs.Add((shapes[i], thumb, baseY));
         }
         SingleComposer.EndClip();
         y += visibleHeight + 14;
@@ -200,7 +201,12 @@ public class GuiDialogBaby : GuiDialogGeneric
 
         // One row per slot, in a clipped column no taller than the preview. Every element in it is drawn
         // dynamically, so it moves with the scrollbar, see OnSlotScroll
-        slotClip = ElementBounds.Fixed(ColumnX, y, SlotColumnWidth, Math.Min(slotsHeight, PreviewSize));
+        slotClip = ElementBounds.Fixed(ColumnX, y, SlotColumnWidth, Math.Max(0, Math.Min(slotsHeight, PreviewSize)));
+        if (Portfolio.IsPortfolioShape(shape))
+        {
+            string ownMaterials = Lang.Get("vsrpbridgeclient:baby-portfolio-materials");
+            SingleComposer.AddStaticText(ownMaterials, CairoFont.WhiteSmallText(), ElementBounds.Fixed(ColumnX, y, SlotColumnWidth, PreviewSize));
+        }
         if (slotsScroll)
         {
             slotScrollBounds = ElementBounds.Fixed(ColumnX + SlotColumnWidth + 6, y, ScrollbarWidth, PreviewSize);
@@ -235,14 +241,6 @@ public class GuiDialogBaby : GuiDialogGeneric
         SingleComposer.EndClip();
         y += PreviewSize + 12;
 
-        if (packet.TabletopAvailable)
-        {
-            SingleComposer
-                .AddSwitch(on => asTabletopPiece = on, ElementBounds.Fixed(0, y, 30, 30), "tabletop")
-                .AddStaticText(Lang.Get("vsrpbridgeclient:baby-tabletop"), CairoFont.WhiteSmallText(), ElementBounds.Fixed(40, y + 6, contentWidth - 40, 22));
-            y += 42;
-        }
-
         SingleComposer
             .AddSmallButton(Lang.Get("Cancel"), () => TryClose(), ElementBounds.Fixed(0, (int)y).WithFixedPadding(10, 4))
             .AddSmallButton(Lang.Get("vsrpbridgeclient:baby-confirm"), OnConfirm,
@@ -253,7 +251,6 @@ public class GuiDialogBaby : GuiDialogGeneric
         // Setting the text calls OnNameChanged, which only asks the bot again when the name changed
         SingleComposer.GetTextInput("name").SetValue(nameText);
         UpdateNameStatus();
-        if (packet.TabletopAvailable) SingleComposer.GetSwitch("tabletop").SetValue(asTabletopPiece);
 
         // Read before SetHeights: it reports the new scrollbar's position of 0 to the scroll handlers, which
         // would overwrite the remembered positions
@@ -434,13 +431,15 @@ public class GuiDialogBaby : GuiDialogGeneric
     private bool OnConfirm()
     {
         if (!NameIsFree) return true;
-        BabyShape shape = packet.Shapes[selectedShape];
+        BabyShape shape = shapes[selectedShape];
         onConfirm(new BabyChoicePacket
         {
             OffspringId = packet.OffspringId,
             ShapeCode = shape.Code,
             Name = name,
-            AsTabletopPiece = packet.TabletopAvailable && asTabletopPiece,
+            // The server makes every baby a tabletop piece when it has Tabletop Games
+            AsTabletopPiece = packet.TabletopAvailable,
+            CustomShape = Portfolio.IsPortfolioShape(shape) ? shape : null,
             SlotChoices = shape.SlotByMaterialIndex.Distinct()
                 .Where(choices.ContainsKey)
                 .ToDictionary(s => s, s => choices[s])
@@ -525,7 +524,7 @@ public class GuiDialogBaby : GuiDialogGeneric
         }
 
         if (previewBounds != null)
-            RenderCentered(PreviewOf(packet.Shapes[selectedShape]), previewBounds, PreviewSize * 0.75, true);
+            RenderCentered(PreviewOf(shapes[selectedShape]), previewBounds, PreviewSize * 0.75, true);
 
         if (slotClip != null)
         {
