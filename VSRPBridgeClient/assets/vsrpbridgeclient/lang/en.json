@@ -45,5 +45,7 @@
     "baby-portfolio-materials": "This design from your portfolio keeps its own materials.",
     "baby-piece-locked": "A newborn can't be taken out of its tabletop piece.",
     "baby-confirm": "Confirm",
+    "baby-reshape-title": "Change how {0} looks",
+    "baby-reshape-explanation": "Pick a new shape below, then a material for each part, such as skin, hair and eyes. The shapes after the server's are the designs in your pantograph portfolio, which keep their own materials. Press Confirm to change the tabletop piece in your hand. Its name, size and anything stacked on it stay the same.",
     "baby-command": "Reopens the menu for a newborn that hasn't been named yet"
 }

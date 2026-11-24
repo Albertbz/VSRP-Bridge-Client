@@ -86,7 +86,9 @@ public class GuiDialogBaby : GuiDialogGeneric
     public override bool DisableMouseGrab => true;
 
     public GuiDialogBaby(ICoreClientAPI capi, OpenBabyDialogPacket packet, Action<BabyChoicePacket> onConfirm, Action<string> requestNameCheck)
-        : base(Lang.Get("vsrpbridgeclient:baby-title"), capi)
+        : base(packet.Reshape
+            ? Lang.Get("vsrpbridgeclient:baby-reshape-title", BabyStackBuilder.CleanName(packet.DefaultName))
+            : Lang.Get("vsrpbridgeclient:baby-title"), capi)
     {
         this.packet = packet;
         this.onConfirm = onConfirm;
@@ -158,18 +160,29 @@ public class GuiDialogBaby : GuiDialogGeneric
         }
         // Sized to the text, which wraps differently with the GUI scale, the language and edits to the lang file.
         // Measuring works in scaled pixels, so the width is scaled and the height scaled back
-        string explanation = Lang.Get("vsrpbridgeclient:baby-explanation");
+        string explanation = Lang.Get(packet.Reshape ? "vsrpbridgeclient:baby-reshape-explanation" : "vsrpbridgeclient:baby-explanation");
         CairoFont explanationFont = CairoFont.WhiteSmallText();
         double explanationHeight = Math.Ceiling(capi.Gui.Text.GetMultilineTextHeight(explanationFont, explanation, GuiElement.scaled(contentWidth)) / RuntimeEnv.GUIScale);
         SingleComposer.AddStaticText(explanation, explanationFont, ElementBounds.Fixed(0, y, contentWidth, explanationHeight));
         y += explanationHeight + 10;
-        SingleComposer
-            .AddStaticText(Lang.Get("vsrpbridgeclient:baby-name"), CairoFont.WhiteSmallText(), ElementBounds.Fixed(0, y + 5, 90, 25))
-            .AddTextInput(ElementBounds.Fixed(90, y, 280, 30), OnNameChanged, CairoFont.TextInput(), "name");
-        y += 34;
-        statusWidth = contentWidth - 90;
-        SingleComposer.AddDynamicText("", CairoFont.WhiteSmallText(), ElementBounds.Fixed(90, y, statusWidth, statusHeight), "nameStatus");
-        y += statusHeight + 8;
+        if (packet.Reshape)
+        {
+            // The name stays, so it is only shown
+            SingleComposer
+                .AddStaticText(Lang.Get("vsrpbridgeclient:baby-name"), CairoFont.WhiteSmallText(), ElementBounds.Fixed(0, y + 5, 90, 25))
+                .AddStaticText(name, CairoFont.WhiteSmallText().WithWeight(FontWeight.Bold), ElementBounds.Fixed(90, y + 5, contentWidth - 90, 25));
+            y += 38;
+        }
+        else
+        {
+            SingleComposer
+                .AddStaticText(Lang.Get("vsrpbridgeclient:baby-name"), CairoFont.WhiteSmallText(), ElementBounds.Fixed(0, y + 5, 90, 25))
+                .AddTextInput(ElementBounds.Fixed(90, y, 280, 30), OnNameChanged, CairoFont.TextInput(), "name");
+            y += 34;
+            statusWidth = contentWidth - 90;
+            SingleComposer.AddDynamicText("", CairoFont.WhiteSmallText(), ElementBounds.Fixed(90, y, statusWidth, statusHeight), "nameStatus");
+            y += statusHeight + 8;
+        }
 
         SingleComposer.AddStaticText(Lang.Get("vsrpbridgeclient:baby-shape"), CairoFont.WhiteSmallText(), ElementBounds.Fixed(0, y, 300, 22));
         y += 26;
@@ -249,7 +262,7 @@ public class GuiDialogBaby : GuiDialogGeneric
             .Compose();
 
         // Setting the text calls OnNameChanged, which only asks the bot again when the name changed
-        SingleComposer.GetTextInput("name").SetValue(nameText);
+        if (!packet.Reshape) SingleComposer.GetTextInput("name").SetValue(nameText);
         UpdateNameStatus();
 
         // Read before SetHeights: it reports the new scrollbar's position of 0 to the scroll handlers, which
@@ -365,7 +378,8 @@ public class GuiDialogBaby : GuiDialogGeneric
         UpdateNameStatus();
     }
 
-    private bool NameIsFree => name.Length > 0 && checkedName == name && checkedStatus == BabyNameStatus.Available;
+    // A reshape keeps the name the baby has, so there is nothing to check
+    private bool NameIsFree => packet.Reshape || (name.Length > 0 && checkedName == name && checkedStatus == BabyNameStatus.Available);
 
     private string StatusText()
     {
@@ -386,6 +400,12 @@ public class GuiDialogBaby : GuiDialogGeneric
     private void UpdateNameStatus()
     {
         if (SingleComposer == null) return;
+        if (packet.Reshape)
+        {
+            var reshapeConfirm = SingleComposer.GetButton("confirm");
+            if (reshapeConfirm != null) reshapeConfirm.Enabled = true;
+            return;
+        }
         string text = StatusText();
         SingleComposer.GetDynamicText("nameStatus")?.SetNewText(text);
         var confirm = SingleComposer.GetButton("confirm");

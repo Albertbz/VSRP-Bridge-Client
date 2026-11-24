@@ -49,6 +49,9 @@ public class OpenBabyDialogPacket
     public bool TabletopAvailable;
     public List<BabyShape> Shapes = new();
     public List<BabySlotOptions> Slots = new();
+    // Changing the shape of a baby the player already has, from /babyshape: the name (DefaultName) is shown but
+    // can't be changed, and isn't checked with the bot
+    public bool Reshape;
 }
 
 /// <summary>Client to server: the player confirmed the baby dialog.</summary>
