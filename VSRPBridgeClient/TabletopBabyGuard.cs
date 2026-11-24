@@ -8,9 +8,10 @@ using Vintagestory.API.Datastructures;
 namespace VSRPBridgeClient;
 
 /// <summary>
-/// Keeps a newborn in its Tabletop Games piece. The piece's Exchange and Remove tool modes take its chiseled
-/// block back out, so they are refused for a piece stamped with an offspring id (BabyStackBuilder.OffspringIdAttribute,
-/// on the piece or its block). Its other modes, such as scaling or stacking extra blocks, still work.
+/// Keeps a newborn in its Tabletop Games piece, on its own. The piece's Exchange and Remove tool modes take its
+/// chiseled block back out, and Up Add and Down Add stack other blocks on it, so they are refused for a piece
+/// stamped with an offspring id (BabyStackBuilder.OffspringIdAttribute, on the piece or its block). Its other
+/// modes still work, such as scaling, rotating, and taking off blocks stacked before this.
 /// Patched on both sides, as tool modes run on the client and then on the server. Does nothing without Tabletop Games.
 /// </summary>
 public static class TabletopBabyGuard
@@ -18,9 +19,11 @@ public static class TabletopBabyGuard
     private const string ToolModesType = "TabletopGames.CollectibleBehaviorChiseledPieceToolModes";
     private const string ContentsAttribute = "containedChiseledStacks";
     private const string MainBlockKey = "0,0,0";
-    // EnumMode.Exchange and EnumMode.Remove of CollectibleBehaviorChiseledPieceToolModes
+    // EnumMode.Exchange, Remove, UpAdd and DownAdd of CollectibleBehaviorChiseledPieceToolModes
     private const int ExchangeMode = 0;
     private const int RemoveMode = 1;
+    private const int UpAddMode = 2;
+    private const int DownAddMode = 4;
 
     public static void Patch(Harmony harmony, ICoreAPI api)
     {
@@ -46,10 +49,15 @@ public static class TabletopBabyGuard
 
     public static bool Prefix(ItemSlot slot, IPlayer byPlayer, int index)
     {
-        if (index != ExchangeMode && index != RemoveMode) return true;
+        bool takesOut = index == ExchangeMode || index == RemoveMode;
+        bool stacks = index == UpAddMode || index == DownAddMode;
+        if (!takesOut && !stacks) return true;
         if (!IsBabyPiece(slot?.Itemstack)) return true;
         if (byPlayer?.Entity?.Api is ICoreClientAPI capi)
-            capi.TriggerIngameError(typeof(TabletopBabyGuard), "vsrpbridgeclient-babypiecelocked", Lang.Get("vsrpbridgeclient:baby-piece-locked"));
+        {
+            string key = takesOut ? "baby-piece-locked" : "baby-piece-no-stacking";
+            capi.TriggerIngameError(typeof(TabletopBabyGuard), "vsrpbridgeclient-" + key, Lang.Get("vsrpbridgeclient:" + key));
+        }
         return false;
     }
 }
