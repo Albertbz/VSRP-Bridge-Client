@@ -12,6 +12,8 @@ public static class BabyStackBuilder
 {
     public const string ChiseledBlockCode = "game:chiseledblock";
     public const int MaxNameLength = 40;
+    /// <summary>The bot's id of the offspring a baby block or tabletop piece is of, so it can be renamed later.</summary>
+    public const string OffspringIdAttribute = "vsrpOffspringId";
 
     // "rotation" holds rotationY + 360 shifted left by 10, so this is no rotation
     private const int NoRotation = 360 << 10;
@@ -55,9 +57,10 @@ public static class BabyStackBuilder
 
     /// <summary>
     /// The chiseled block for the shape with the chosen materials, named name (the default chiseled block name
-    /// when empty). Null when the chiseled block or one of the materials doesn't exist.
+    /// when empty), stamped with offspringId when given. Null when the chiseled block or one of the materials
+    /// doesn't exist.
     /// </summary>
-    public static ItemStack? Build(IWorldAccessor world, BabyShape shape, IReadOnlyDictionary<string, string> choices, string? name)
+    public static ItemStack? Build(IWorldAccessor world, BabyShape shape, IReadOnlyDictionary<string, string> choices, string? name, string? offspringId = null)
     {
         Block? chisel = world.GetBlock(new AssetLocation(ChiseledBlockCode));
         if (chisel == null || shape.FallbackMaterials.Length == 0) return null;
@@ -85,6 +88,7 @@ public static class BabyStackBuilder
         // Always set, since a missing name falls back to the material's name but a null one would throw.
         // Side solidity is left out, so the server works it out when the block is placed
         stack.Attributes.SetString("blockName", CleanName(name));
+        if (!string.IsNullOrEmpty(offspringId)) stack.Attributes.SetString(OffspringIdAttribute, offspringId);
         return stack;
     }
 }
